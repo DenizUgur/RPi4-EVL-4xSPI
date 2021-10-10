@@ -1,0 +1,14 @@
+[Unit]
+Description=Encoder Reader
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+Environment=LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/evl/lib
+ExecStart=/usr/local/bin/oob-spi-v2 192.168.1.1 8080
+
+[Install]
+WantedBy=multi-user.target

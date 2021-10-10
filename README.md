@@ -2,17 +2,17 @@
 
 In the end of this guide, you will be able to use 4 SPI peripherals with DMA enabled on EVL kernel. SPI0,4,5,6 are used and each of them sample a SPI encoder at 30KHz (40-bit at 1.25MHz).
 
-A tested SD card image is available from TODO. However, setup is pretty easy and it is highly recommended you do it manually.
+A tested SD card image is available from [here](https://github.com/DenizUgur/RPi4-EVL-4xSPI/releases/tag/V1). However, setup is pretty easy and it is highly recommended you do it manually.
 
-# Getting the sources
+# Getting the resources
 
-- Prepare the environment
+Prepare the environment
 
   ```bash
   $~> mkdir development
   $~> cd development
 
-  $~/development> wget TODO
+  $~/development> wget https://raw.githubusercontent.com/DenizUgur/RPi4-EVL-4xSPI/master/0001-spidev-x4-rpi4b.patch
 
   $~/development> sudo apt install build-essential \
                               git \
@@ -22,7 +22,7 @@ A tested SD card image is available from TODO. However, setup is pretty easy and
                               g++-arm-linux-gnueabihf
   ```
 
-- EVL patched Linux
+EVL patched Linux
 
   ```bash
   $~/development> git clone --depth 1 --branch evl/v5.10 https://git.evlproject.org/linux-evl.git
@@ -32,13 +32,13 @@ A tested SD card image is available from TODO. However, setup is pretty easy and
   $~/development/linux-evl> git checkout 536c8af4842ce95fd6bea497ff3c960cf3a29482
   ```
 
-- Apply the provided patch to the Linux Tree
+Apply the provided patch to the Linux Tree
 
   ```bash
   $~/development/linux-evl> patch -p1 < ../0001-spidev-x4-rpi4b.patch
   ```
 
-- EVL Libraries
+EVL Libraries
 
   ```bash
   $~/development/linux-evl> cd ..
@@ -70,7 +70,7 @@ cd $BASE/linux-evl-build
 
 make -j8 -C $BASE/linux-evl O=$PWD ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE multi_v7_defconfig
 
-wget TODO -O .config
+wget https://raw.githubusercontent.com/DenizUgur/RPi4-EVL-4xSPI/master/evl_arm_defconfig -O .config
 
 time make -j8 -C $BASE/linux-evl O=$PWD ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE
 
@@ -140,4 +140,26 @@ busybox devmem 0xfe204e00 32 0x03800000
 /usr/evl/tidbits/oob-spi /dev/spidev3.0
 ```
 
+> Note: `prepare.sh` file contains these commands too.
+
 If everything returns an output of repeating 42's with the duration of transfer then it's okay.
+
+# Extras
+
+An example application was provided, `oob-spi-v2.c`. You can compile this application on either host or target but headers and `libevl.so` must be present in your workspace.
+
+```bash
+gcc oob-spi-v2.c -lrt -lpthread -I/usr/evl/include /usr/evl/lib/libevl.so -O2 -g -o oob-spi-v2
+```
+
+An example systemd service file was provided, `encoder.service`. You can enable this service by executing following commands.
+
+```bash
+sudo mv /home/pi/oob-spi-v2 /usr/local/bin/oob-spi-v2
+sudo mv /home/pi/encoder.service /etc/systemd/system/encoder.service
+
+sudo systemctl start encoder
+sudo systemctl enable encoder
+```
+
+> Warning: Do not forget that you need to execute the command starting with busybox (look at previous section) at either boot or before executing the sample application.
