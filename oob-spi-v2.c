@@ -38,10 +38,13 @@ struct spi_int
 
 	/*Encoder related */
 	double pos;
+	int mt_size;
+	int st_size;
+	double c_enc; // Encoder constant
 };
 
 static void timespec_add_ns(struct timespec *__restrict r, const struct timespec *__restrict t,
-		long ns)
+							long ns)
 {
 	long s, rem;
 
@@ -80,6 +83,11 @@ static long _lround(float num)
 	return num < 0 ? num - 0.5 : num + 0.5;
 }
 
+static uint8_t _dceil(int a, int b)
+{
+	return (a / b) + ((a % b) != 0);
+}
+
 int main(int argc, char *argv[])
 {
 	int ret, tfd;
@@ -91,8 +99,8 @@ int main(int argc, char *argv[])
 	static uint32_t speed = 1250000;
 	static int len = 8;
 
-	double frequency = 1 / 3.0;
-	long period = _lround(frequency *1.0e6);
+	double frequency = 3.0;
+	long period = _lround((1 / frequency) * 1.0e6);
 
 	/*Initialize SPI devices */
 	struct spi_int spi_devices[spi_count];
@@ -135,14 +143,14 @@ int main(int argc, char *argv[])
 		current_device->oob_setup.speed_hz = speed;
 		current_device->oob_setup.bits_per_word = bits;
 		ret = ioctl(current_device->fd,
-			SPI_IOC_ENABLE_OOB_MODE, &current_device->oob_setup);
+					SPI_IOC_ENABLE_OOB_MODE, &current_device->oob_setup);
 		if (ret)
 			error(1, errno, "ioctl(SPI_IOC_ENABLE_OOB_MODE)");
 
 		printf("mapping %d bytes, tx@%d, rx@%d\n",
-					current_device->oob_setup.iobuf_len,
-					current_device->oob_setup.tx_offset,
-					current_device->oob_setup.rx_offset);
+			   current_device->oob_setup.iobuf_len,
+			   current_device->oob_setup.tx_offset,
+			   current_device->oob_setup.rx_offset);
 
 		/*
 		 *We may map the I/O area now, it is composed of two adjacent
@@ -150,9 +158,9 @@ int main(int argc, char *argv[])
 		 *mapping is always on coherent DMA memory (i.e. non-cached).
 		 */
 		current_device->iobuf = mmap(NULL,
-										current_device->oob_setup.iobuf_len,
-										PROT_READ | PROT_WRITE,
-										MAP_SHARED, current_device->fd, 0);
+									 current_device->oob_setup.iobuf_len,
+									 PROT_READ | PROT_WRITE,
+									 MAP_SHARED, current_device->fd, 0);
 		if (current_device->iobuf == MAP_FAILED)
 			error(1, errno, "mmap()");
 
@@ -166,6 +174,17 @@ int main(int argc, char *argv[])
 		current_device->rx = current_device->iobuf + current_device->oob_setup.rx_offset;
 		memset(current_device->rx, 0, len);
 		current_device->len = len;
+
+		/*Decide whether an encoder has a different data format */
+		current_device->mt_size = 16;
+		current_device->st_size = 23;
+		current_device->c_enc = 0.000000749;
+
+		if (argc > 3 && spi_i == atoi(argv[3]))
+		{
+			current_device->mt_size = 0;
+			current_device->st_size = 21;
+		}
 	}
 
 	/*Setup OOB process */
@@ -188,7 +207,7 @@ int main(int argc, char *argv[])
 		error(1, errno, "socket()");
 
 	int sock_flag = 1;
-	ret = setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (char*) &sock_flag, sizeof(int));
+	ret = setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (char *)&sock_flag, sizeof(int));
 	if (ret < 0)
 		error(1, errno, "setsockopt()");
 
@@ -198,7 +217,7 @@ int main(int argc, char *argv[])
 	in_addr.sin_port = htons(atoi(argv[2]));
 
 	evl_printf("Waiting for connection on %s:%s\n", argv[1], argv[2]);
-	while (0 > (ret = connect(sockfd, (struct sockaddr *) &in_addr, sizeof(in_addr))));
+	while (0 > (ret = connect(sockfd, (struct sockaddr *)&in_addr, sizeof(in_addr))));
 	evl_printf("Got connection on %s:%s\n", argv[1], argv[2]);
 
 	/*Set up timer */
@@ -233,7 +252,7 @@ int main(int argc, char *argv[])
 		if (ticks > 1)
 		{
 			fprintf(stderr, "timer overrun! %lld ticks late\n",
-				ticks - 1);
+					ticks - 1);
 		}
 
 		/*Read current time */
@@ -252,32 +271,36 @@ int main(int argc, char *argv[])
 
 			/*Convert RX buffer to position data */
 			uint8_t index;
-			uint16_t mt = 0x00;
-			uint32_t st = 0x00;
+			uint64_t mt = 0x00;
+			uint64_t st = 0x00;
 
-			for (index = 0; index < 2; index++)
+			uint8_t mt_size_byte = _dceil(current_device->mt_size, 8);
+			uint8_t st_size_byte = _dceil(current_device->st_size, 8);
+
+			for (index = 0; index < mt_size_byte; index++)
 			{
 				mt <<= 8;
-				mt |= (uint8_t) current_device->rx[index];
+				mt |= (uint8_t)current_device->rx[index];
 			}
+			mt >>= (current_device->mt_size % 8) == 0 ? 0 : 8 - (current_device->mt_size % 8);
 
-			for (index = 2; index < 5; index++)
+			for (index = mt_size_byte; index < mt_size_byte + st_size_byte; index++)
 			{
 				st <<= 8;
-				st |= (uint8_t) current_device->rx[index];
+				st |= (uint8_t)current_device->rx[index];
 			}
-			st >>= 1;
+			st >>= (current_device->st_size % 8) == 0 ? 0 : 8 - (current_device->st_size % 8);
 
-			current_device->pos = (st *0.000000749) + (mt *2 * 3.141592654);
+			current_device->pos = (st * current_device->c_enc) + (mt * 2 * 3.141592654);
 		}
 
 		/*Do the TCP transfer */
 		char sample[100];
 		sprintf(sample, "<%.8f %.8f %.8f %.8f>",
-							spi_devices[0].pos,
-							spi_devices[1].pos,
-							spi_devices[2].pos,
-							spi_devices[3].pos);
+				spi_devices[0].pos,
+				spi_devices[1].pos,
+				spi_devices[2].pos,
+				spi_devices[3].pos);
 
 		ret = send(sockfd, &sample, sizeof(sample), 0);
 		if (ret != sizeof(sample))
@@ -296,13 +319,13 @@ int main(int argc, char *argv[])
 	for (int spi_i = 0; spi_i < spi_count; spi_i++)
 	{
 		/*Perform close operations on current SPI device */
-		struct spi_int current_device = spi_devices[spi_i];
-		munmap(current_device.iobuf, current_device.oob_setup.iobuf_len);
+		struct spi_int *current_device = &spi_devices[spi_i];
+		munmap(current_device->iobuf, current_device->oob_setup.iobuf_len);
 
-		ret = ioctl(current_device.fd, SPI_IOC_DISABLE_OOB_MODE);
+		ret = ioctl(current_device->fd, SPI_IOC_DISABLE_OOB_MODE);
 		if (ret)
 			error(1, errno, "ioctl(SPI_IOC_DISABLE_OOB_MODE)");
-		close(current_device.fd);
+		close(current_device->fd);
 	}
 
 	return 0;
