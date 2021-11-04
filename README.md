@@ -146,16 +146,18 @@ If everything returns an output of repeating 42's with the duration of transfer 
 
 # Extras
 
-An example application was provided, `oob-spi-v2.c`. You can compile this application on either host or target but headers and `libevl.so` must be present in your workspace.
+An example application was provided in the `client/` directory. You can compile this application on either host or target but headers and `libevl.so` must be present in your workspace.
 
 ```bash
-gcc oob-spi-v2.c -lrt -lpthread -I/usr/evl/include /usr/evl/lib/libevl.so -O2 -g -o oob-spi-v2
+cd client/
+cmake .
+make
 ```
 
 An example systemd service file was provided, `encoder.service`. You can enable this service by executing following commands.
 
 ```bash
-sudo mv /home/pi/oob-spi-v2 /usr/local/bin/oob-spi-v2
+sudo mv /home/pi/client/client /usr/local/bin/oob-spi-v2
 sudo mv /home/pi/encoder.service /etc/systemd/system/encoder.service
 
 sudo systemctl start encoder
