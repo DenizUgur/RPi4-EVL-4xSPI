@@ -1,8 +1,12 @@
+#ifndef HEADER_MAIN
+#define HEADER_MAIN
+
 /* Standard */
 #include <sys/ioctl.h>
 #include <sys/sysinfo.h>
 #include <sys/types.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
 #include <signal.h>
 #include <time.h>
 #include <stdint.h>
@@ -34,10 +38,13 @@
 
 /* Include */
 #include "color.h"
+#include "helpers.h"
 
 /* Porgram specific variables */
 #define CLIENT_SPI_DEV_NUM  4
 #define CLIENT_FREQUENCY    5.0
+#define CLIENT_LOG_FILE     true
+#define CLIENT_SEND_DIFF    true
 
 struct spi_int
 {
@@ -51,7 +58,14 @@ struct spi_int
 
     /* Encoder related */
     double pos;
+    double diff;
     int mt_size;
     int st_size;
     double c_enc; // Encoder constant
 };
+
+int initialize_spi(int index, struct spi_int *device);
+
+void encoder_read(struct spi_int *device);
+
+#endif

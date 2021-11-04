@@ -1,32 +1,6 @@
 #include "main.h"
 
-// static double ts2ms(struct timespec *__restrict ts)
-// {
-//     double ret = 0;
-
-//     ret += ts->tv_nsec / 1.0e6;
-//     ret += ts->tv_sec * 1.0e3;
-
-//     return ret;
-// }
-
-static void timespec_add_ns(struct timespec *__restrict r, const struct timespec *__restrict t,
-                            long ns)
-{
-    long s, rem;
-
-    s = ns / 1000000000;
-    rem = ns - s * 1000000000;
-    r->tv_sec = t->tv_sec + s;
-    r->tv_nsec = t->tv_nsec + rem;
-    if (r->tv_nsec >= 1000000000)
-    {
-        r->tv_sec++;
-        r->tv_nsec -= 1000000000;
-    }
-}
-
-static int initialize_spi(int index, struct spi_int *device)
+int initialize_spi(int index, struct spi_int *device)
 {
     // SPI configuration
     uint8_t spi_count = 4;
@@ -85,7 +59,7 @@ static int initialize_spi(int index, struct spi_int *device)
     return 0;
 }
 
-static void encoder_read(struct spi_int *device)
+void encoder_read(struct spi_int *device)
 {
     int ret;
     memset(device->rx, 0, device->len);
@@ -116,20 +90,22 @@ static void encoder_read(struct spi_int *device)
     }
     st >>= (device->st_size % 8) == 0 ? 0 : 8 - (device->st_size % 8);
 
-    device->pos = (st * device->c_enc) + (mt * 2 * 3.141592654);
+    double read = (st * device->c_enc) + (mt * 2 * 3.141592654);
+
+    device->diff = read - device->pos;
+    device->pos = read;
 }
 
 int main(int argc, char *argv[])
 {
     struct spi_int *spi_devices;
     pid_t childs[CLIENT_SPI_DEV_NUM];
+    int size = sizeof(struct spi_int) * CLIENT_SPI_DEV_NUM;
 
     { /* SPI devices memory initialization  */
         printf(ANSI_COLOR_YELLOW "Creating shared memory for SPI devices... " ANSI_COLOR_RESET);
 
         int memfd, proxyfd, ret;
-        int size = sizeof(struct spi_int) * CLIENT_SPI_DEV_NUM;
-
         memfd = memfd_create("spi_devices", 0);
 
         ret = ftruncate(memfd, size);
@@ -183,7 +159,6 @@ int main(int argc, char *argv[])
             /* Setup SPI */
             struct spi_int *ptr;
             int fd;
-            int size = sizeof(struct spi_int) * CLIENT_SPI_DEV_NUM;
 
             fd = open("/dev/evl/proxy/spi-devices", O_RDWR);
             ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -308,42 +283,49 @@ int main(int argc, char *argv[])
             error(1, ret, "evl_open_sem()");
     }
 
-    // int proxyfd, debugfd;
-    // debugfd = open("time.log", O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    // proxyfd = evl_new_proxy(debugfd, 1024 * 1024, "log:%d", getpid());
+#ifdef CLIENT_LOG_FILE
+    int proxyfd, debugfd;
+    debugfd = open("time.log", O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    proxyfd = evl_new_proxy(debugfd, 1024 * 1024, "log:%d", getpid());
 
-    // double start_time = ts2ms(&now);
-    // double prev_time = ts2ms(&now);
+    double start_time = ts2ms(&now);
+    double prev_time = ts2ms(&now);
+#endif
 
     for (;;)
     {
-        int waiters = 0;
-        for (int sid = 0; sid < CLIENT_SPI_DEV_NUM; sid++)
-        {
-            int r_val;
-            evl_peek_sem(&sems[sid], &r_val);
-            waiters += r_val;
-        }
-
-        if (waiters != -CLIENT_SPI_DEV_NUM)
+        if (poll_readers(sems) != -CLIENT_SPI_DEV_NUM)
         {
             nanosleep((const struct timespec[]){{0, 10000L}}, NULL);
             continue;
         }
 
+#ifdef CLIENT_SEND_DIFF
+        char packet[150];
+        sprintf(packet, "<%.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f>",
+                spi_devices[0].pos,
+                spi_devices[0].diff,
+                spi_devices[1].pos,
+                spi_devices[1].diff,
+                spi_devices[2].pos,
+                spi_devices[2].diff,
+                spi_devices[3].pos,
+                spi_devices[3].diff);
+#else
         char packet[100];
         sprintf(packet, "<%.8f %.8f %.8f %.8f>",
                 spi_devices[0].pos,
                 spi_devices[1].pos,
                 spi_devices[2].pos,
                 spi_devices[3].pos);
+#endif
 
         for (int sid = 0; sid < CLIENT_SPI_DEV_NUM; sid++)
             evl_put_sem(&sems[sid]);
 
         ret = send(sockfd, &packet, sizeof(packet), 0);
         if (ret != sizeof(packet))
-            error(1, errno, "send() start");
+            break;
 
         /* Wait for the next tick to be notified. */
         ret = oob_read(tmfd, &ticks, sizeof(ticks));
@@ -354,33 +336,48 @@ int main(int argc, char *argv[])
         if (ret < 0)
             error(1, errno, "evl_read_clock()");
 
-        // double now_ms = ts2ms(&now);
-        // double diff = now_ms - prev_time;
-        // prev_time = now_ms;
+#ifdef CLIENT_LOG_FILE
+        double now_ms = ts2ms(&now);
+        double diff = now_ms - prev_time;
+        prev_time = now_ms;
 
-        // if (now_ms >= (start_time + (10.0 * 1000)))
-        //     break;
-
-        // evl_print_proxy(proxyfd, "%.8f %d\n", diff, ticks - 1);
+        evl_print_proxy(proxyfd, "%.8f %d\n", diff, ticks - 1);
+#endif
     }
 
+    // Wait children to stop using SPI
+    for (;;)
+    {
+        if (poll_readers(sems) != -CLIENT_SPI_DEV_NUM)
+            nanosleep((const struct timespec[]){{0, 10000L}}, NULL);
+        else
+            break;
+    }
+
+    // Kill child processes
     for (int sid = 0; sid < CLIENT_SPI_DEV_NUM; sid++)
+    {
+        struct spi_int *current_device = &spi_devices[sid];
+        munmap(current_device->iobuf, current_device->oob_setup.iobuf_len);
+        close(current_device->fd);
+
+        ret = evl_close_sem(&sems[sid]);
+        if (ret < 0)
+            error(1, ret, "evl_close_sem()");
+
         if (kill(childs[sid], SIGTERM) == -1 && errno != ESRCH)
             exit(EXIT_FAILURE);
+    }
+
+    // Release memory
+    munmap(spi_devices, size);
+
+#ifdef CLIENT_LOG_FILE
+    close(debugfd);
+#endif
 
     while (wait(NULL) != -1 || errno == EINTR)
         ;
-
-    // for (int spi_i = 0; spi_i < spi_count; spi_i++)
-    // {
-    //     struct spi_int *current_device = &spi_devices[spi_i];
-    //     munmap(current_device->iobuf, current_device->oob_setup.iobuf_len);
-
-    //     ret = ioctl(current_device->fd, SPI_IOC_DISABLE_OOB_MODE);
-    //     if (ret)
-    //         error(1, errno, "ioctl(SPI_IOC_DISABLE_OOB_MODE)");
-    //     close(current_device->fd);
-    // }
 
     return 0;
 }

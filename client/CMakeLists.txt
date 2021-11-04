@@ -11,6 +11,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -g -D_GNU_SOURCE")
 
 # Create a sources variable with a link to all cpp files to compile
 set(SOURCES
+    src/helpers.c
     src/main.c
 )
 
