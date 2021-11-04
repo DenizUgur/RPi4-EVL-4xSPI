@@ -43,7 +43,7 @@
 /* Porgram specific variables */
 #define CLIENT_SPI_DEV_NUM  4
 #define CLIENT_FREQUENCY    5.0
-#define CLIENT_LOG_FILE     true
+#define CLIENT_LOG_FILE     false
 #define CLIENT_SEND_DIFF    true
 
 struct spi_int

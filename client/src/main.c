@@ -283,12 +283,13 @@ int main(int argc, char *argv[])
             error(1, ret, "evl_open_sem()");
     }
 
-#ifdef CLIENT_LOG_FILE
+#if CLIENT_LOG_FILE
     int proxyfd, debugfd;
     debugfd = open("time.log", O_WRONLY | O_CREAT | O_TRUNC, 0600);
     proxyfd = evl_new_proxy(debugfd, 1024 * 1024, "log:%d", getpid());
+#endif
 
-    double start_time = ts2ms(&now);
+#if CLIENT_SEND_DIFF
     double prev_time = ts2ms(&now);
 #endif
 
@@ -300,17 +301,27 @@ int main(int argc, char *argv[])
             continue;
         }
 
-#ifdef CLIENT_SEND_DIFF
+#if CLIENT_SEND_DIFF || CLIENT_LOG_FILE
+        double now_ms = ts2ms(&now);
+        double rate = (now_ms - prev_time) / 1e4;
+        prev_time = now_ms;
+#endif
+
+#if CLIENT_LOG_FILE
+        evl_print_proxy(proxyfd, "%.8f %d\n", rate, ticks - 1);
+#endif
+
+#if CLIENT_SEND_DIFF
         char packet[150];
         sprintf(packet, "<%.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f>",
                 spi_devices[0].pos,
-                spi_devices[0].diff,
+                spi_devices[0].diff / rate,
                 spi_devices[1].pos,
-                spi_devices[1].diff,
+                spi_devices[1].diff / rate,
                 spi_devices[2].pos,
-                spi_devices[2].diff,
+                spi_devices[2].diff / rate,
                 spi_devices[3].pos,
-                spi_devices[3].diff);
+                spi_devices[3].diff / rate);
 #else
         char packet[100];
         sprintf(packet, "<%.8f %.8f %.8f %.8f>",
@@ -335,14 +346,6 @@ int main(int argc, char *argv[])
         ret = evl_read_clock(EVL_CLOCK_MONOTONIC, &now);
         if (ret < 0)
             error(1, errno, "evl_read_clock()");
-
-#ifdef CLIENT_LOG_FILE
-        double now_ms = ts2ms(&now);
-        double diff = now_ms - prev_time;
-        prev_time = now_ms;
-
-        evl_print_proxy(proxyfd, "%.8f %d\n", diff, ticks - 1);
-#endif
     }
 
     // Wait children to stop using SPI
@@ -372,7 +375,7 @@ int main(int argc, char *argv[])
     // Release memory
     munmap(spi_devices, size);
 
-#ifdef CLIENT_LOG_FILE
+#if CLIENT_LOG_FILE
     close(debugfd);
 #endif
 
