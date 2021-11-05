@@ -59,9 +59,6 @@ struct spi_int
     /* Encoder related */
     double pos;
     double diff;
-    int mt_size;
-    int st_size;
-    double c_enc; // Encoder constant
 };
 
 int initialize_spi(int index, struct spi_int *device);

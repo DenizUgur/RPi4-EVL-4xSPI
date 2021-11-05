@@ -73,24 +73,20 @@ void encoder_read(struct spi_int *device)
     uint64_t mt = 0x00;
     uint64_t st = 0x00;
 
-    uint8_t mt_size_byte = ceil(device->mt_size / 8);
-    uint8_t st_size_byte = ceil(device->st_size / 8);
-
-    for (index = 0; index < mt_size_byte; index++)
+    for (index = 0; index < 2; index++)
     {
         mt <<= 8;
         mt |= (uint8_t)device->rx[index];
     }
-    mt >>= (device->mt_size % 8) == 0 ? 0 : 8 - (device->mt_size % 8);
 
-    for (index = mt_size_byte; index < mt_size_byte + st_size_byte; index++)
+    for (index = 2; index < 5; index++)
     {
         st <<= 8;
         st |= (uint8_t)device->rx[index];
     }
-    st >>= (device->st_size % 8) == 0 ? 0 : 8 - (device->st_size % 8);
+    st >>= 1;
 
-    double read = (st * device->c_enc) + (mt * 2 * 3.141592654);
+    double read = (st * 0.000000749) + (mt * 2 * 3.141592654);
 
     device->diff = read - device->pos;
     device->pos = read;
@@ -174,17 +170,6 @@ int main(int argc, char *argv[])
             semfd = evl_create_sem(&sem, EVL_CLOCK_MONOTONIC, 0, EVL_CLONE_PUBLIC, "/sem-%d", sid);
             if (!semfd)
                 error(1, ret, "evl_create_sem()");
-
-            /* Set encoder specific attributes */
-            device->mt_size = 16;
-            device->st_size = 23;
-            device->c_enc = 0.000000749;
-
-            if (argc > 3 && sid == atoi(argv[3]))
-            {
-                device->mt_size = 0;
-                device->st_size = 21;
-            }
 
             printf(ANSI_COLOR_GREEN "Configured process #%d\n" ANSI_COLOR_RESET, sid);
 
