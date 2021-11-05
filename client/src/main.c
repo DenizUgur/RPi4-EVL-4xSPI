@@ -285,7 +285,7 @@ int main(int argc, char *argv[])
 
 #if CLIENT_LOG_FILE
     int proxyfd, debugfd;
-    debugfd = open("time.log", O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    debugfd = open("/var/log/rt-encoder-task.log", O_WRONLY | O_CREAT | O_TRUNC, 0600);
     proxyfd = evl_new_proxy(debugfd, 1024 * 1024, "log:%d", getpid());
 #endif
 
@@ -307,10 +307,6 @@ int main(int argc, char *argv[])
         prev_time = now_ms;
 #endif
 
-#if CLIENT_LOG_FILE
-        evl_print_proxy(proxyfd, "%.8f %d\n", rate, ticks - 1);
-#endif
-
 #if CLIENT_SEND_DIFF
         char packet[150];
         sprintf(packet, "<%.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f>",
@@ -322,6 +318,20 @@ int main(int argc, char *argv[])
                 spi_devices[2].diff / rate,
                 spi_devices[3].pos,
                 spi_devices[3].diff / rate);
+
+#if CLIENT_LOG_FILE
+        evl_print_proxy(proxyfd, "%.8f %d %.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f\n",
+                        rate,
+                        ticks - 1,
+                        spi_devices[0].pos,
+                        spi_devices[0].diff / rate,
+                        spi_devices[1].pos,
+                        spi_devices[1].diff / rate,
+                        spi_devices[2].pos,
+                        spi_devices[2].diff / rate,
+                        spi_devices[3].pos,
+                        spi_devices[3].diff / rate);
+#endif
 #else
         char packet[100];
         sprintf(packet, "<%.8f %.8f %.8f %.8f>",
@@ -329,6 +339,16 @@ int main(int argc, char *argv[])
                 spi_devices[1].pos,
                 spi_devices[2].pos,
                 spi_devices[3].pos);
+
+#if CLIENT_LOG_FILE
+        evl_print_proxy(proxyfd, "%.8f %d %.8f %.8f %.8f %.8f\n",
+                        rate,
+                        ticks - 1,
+                        spi_devices[0].pos,
+                        spi_devices[1].pos,
+                        spi_devices[2].pos,
+                        spi_devices[3].pos);
+#endif
 #endif
 
         for (int sid = 0; sid < CLIENT_SPI_DEV_NUM; sid++)
