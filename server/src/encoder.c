@@ -115,27 +115,39 @@ double parseData(char *data, uint8_t clientID)
 {
     char *token;
     char *rest = data;
-    int idx = 0;
+    int ai = 0;
+    int si = 0;
 
     while ((token = strtok_r(rest, " ", &rest)))
     {
         switch (clientID)
         {
         case CLIENT_0:
-            Encoder.encoderAngleSet0[idx] = strtod(token, NULL);
+            if ((ai + si) % 2 == 0)
+                Encoder.encoderAngleSet0[ai++] = strtod(token, NULL);
+            else
+                Encoder.encoderSpeedSet0[si++] = strtod(token, NULL);
             break;
         case CLIENT_1:
-            Encoder.encoderAngleSet1[idx] = strtod(token, NULL);
+            if ((ai + si) % 2 == 0)
+                Encoder.encoderAngleSet1[ai++] = strtod(token, NULL);
+            else
+                Encoder.encoderSpeedSet1[si++] = strtod(token, NULL);
             break;
         case CLIENT_2:
-            Encoder.encoderAngleSet2[idx] = strtod(token, NULL);
+            if ((ai + si) % 2 == 0)
+                Encoder.encoderAngleSet2[ai++] = strtod(token, NULL);
+            else
+                Encoder.encoderSpeedSet2[si++] = strtod(token, NULL);
             break;
         case CLIENT_3:
-            Encoder.encoderAngleSet3[idx] = strtod(token, NULL);
+            if ((ai + si) % 2 == 0)
+                Encoder.encoderAngleSet3[ai++] = strtod(token, NULL);
+            else
+                Encoder.encoderSpeedSet3[si++] = strtod(token, NULL);
             break;
         default:
             break;
         }
-        idx++;
     }
 }

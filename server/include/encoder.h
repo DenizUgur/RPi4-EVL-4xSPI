@@ -25,6 +25,7 @@
 #define PI2 (6.283185307)          ///< 2 * pi
 #define ONE_OVER_2PI (0.159154943) ///< 1 / 2pi
 #define ENCODER_CONSTANT (PI2 / (pow(2, 23) - 1))
+#define SPEED_FROM_CLIENT (true)
 
 #define UNWRAP_IN_LINUX
 
@@ -44,6 +45,13 @@ typedef struct
     double encoderAngleSet1[4]; ///< buffer to store angle information in set 2
     double encoderAngleSet2[4]; ///< buffer to store angle information in set 3
     double encoderAngleSet3[4]; ///< buffer to store angle information in set 3
+
+#if SPEED_FROM_CLIENT
+    double encoderSpeedSet0[4]; ///< buffer to store speed information in set 1
+    double encoderSpeedSet1[4]; ///< buffer to store speed information in set 2
+    double encoderSpeedSet2[4]; ///< buffer to store speed information in set 3
+    double encoderSpeedSet3[4]; ///< buffer to store speed information in set 3
+#endif
 } encoder_data_t;
 #endif
 
