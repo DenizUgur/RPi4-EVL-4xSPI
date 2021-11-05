@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
             if (ret)
                 error(1, ret, "pthread_setschedparam()");
 
-            efd = evl_attach_self("oob-spi:%d", getpid());
+            efd = evl_attach_self("rt-encoder-task:%d", getpid());
             if (efd < 0)
                 error(1, -efd, "cannot attach to the EVL core");
 
@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
         error(1, ret, "pthread_setschedparam()");
 
     /* Let's attach to the EVL core. */
-    efd = evl_attach_self("oob-spi:%d", getpid());
+    efd = evl_attach_self("rt-encoder-task:%d", getpid());
     if (efd < 0)
         error(1, -efd, "cannot attach to the EVL core");
 
