@@ -291,7 +291,7 @@ int main(int argc, char *argv[])
 
 #if CLIENT_SEND_DIFF || CLIENT_LOG_FILE
         double now_ms = ts2ms(&now);
-        double rate = (now_ms - prev_time) / 1e4;
+        double rate = (now_ms - prev_time) / 1e3;
         prev_time = now_ms;
 #endif
 
