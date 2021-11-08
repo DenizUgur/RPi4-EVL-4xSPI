@@ -269,8 +269,11 @@ int main(int argc, char *argv[])
     }
 
 #if CLIENT_LOG_FILE
+    char log_name[100];
+    sprintf(log_name, "/var/log/rt-encoder-task-%u.log", (unsigned)time(NULL));
+
     int proxyfd, debugfd;
-    debugfd = open("/var/log/rt-encoder-task.log", O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    debugfd = open(log_name, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     proxyfd = evl_new_proxy(debugfd, 1024 * 1024, "log:%d", getpid());
 #endif
 
